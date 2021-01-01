@@ -4,10 +4,12 @@ from bs4 import BeautifulSoup
 import urllib.request
 from urllib.request import Request, urlopen
 import urllib.parse
+import urllib.error
 import csv
 import time
 import os
 import re
+from datetime import datetime
 
 def main():
     fichier_src = getNomFichier()
@@ -31,7 +33,7 @@ def getNomEntreprise(source):
 
 def get_url(nom):
     url = "https://www.google.com/search?q="+nom
-    req = Request(url.replace(" ", "+"), headers={'User-Agent': 'Mozilla/5.0'})
+    req = Request(url.replace(" ", "+"), headers={'User-Agent': 'Mozilla/5.0', 'cookie': '<my cookie>'})
     page = urlopen(req).read()
     soup = BeautifulSoup(page, 'html.parser')
     url_site = ""
@@ -59,7 +61,7 @@ def get_url(nom):
   
 def get_mail(url):           
     url_site = "https://www.google.com/search?q="+url+"+contact"
-    req_site = Request(url_site, headers={'User-Agent': 'Mozilla/5.0'})
+    req_site = Request(url_site, headers={'User-Agent': 'Mozilla/5.0', 'cookie': '<my cookie>'})
     page_site = urlopen(req_site).read()
     soup_site = BeautifulSoup(page_site, 'html.parser')
     
@@ -75,10 +77,12 @@ def get_mail(url):
         
         #extraction mail
         liste_mail = []
-        regex = "\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b" #pattern mail
+        #regex = "\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b" #pattern mail
         for l in liste:
             if "@" in l:
-                liste_mail = extraireMail(l)
+                x = extraireMail(l)
+                if x not in liste_mail:
+                    liste_mail.append(x)
 
     except:
         pass
@@ -90,7 +94,7 @@ def extraireMail(texte):
     liste = re.findall(pattern, texte)
     liste_mail = []
     for l in liste:
-        if l.replace(" ", "") not in liste_mail:
+        if l not in liste_mail:
             liste_mail.append(l)
 
     return liste_mail 
@@ -106,28 +110,57 @@ def maj_csv(source):
         reader = csv.DictReader(fichier_src)    
 
         liste_nom_ent = getNomEntreprise(source)
+        i = 0
         k = 0
         for row in reader:
-            nom = row["Nom"].lower()
-            if nom in liste_nom_ent:
-                site_web = get_url(nom)
-                if site_web:
-                    contact = get_mail(site_web)
+            try:
+                nom = row["Nom"].lower()
+                if nom in liste_nom_ent:
+                    site_web = get_url(nom)
+                    if site_web:
+                        contact = get_mail(site_web)
+                    else:
+                        contact = []
+                    
+                    writer.writerow({
+                        'Categorie': row["Categorie"],
+                        'Nom': row["Nom"],
+                        'Ville': row["Ville"], 
+                        'Code Postal': row["Code Postal"],
+                        'Activite principale': row["Activite principale"],
+                        'Site Web': site_web,
+                        'Contact': contact
+                    })
+                    k+=1
+                print(str(i), " lignes traitées", end="\r")
+                i+=1
+                #time.sleep(1)
+            except urllib.error.HTTPError as err: 
+                if err.code == 429:
+                    print("Erreur HTTP 429 ('Too many requests')")
+                    print("Arrêt momentané du programme, reprise dans 10 minute ( heure actuelle :", str(datetime.now().time()), ")")
+                    print(str(k), " adresses mails trouvées pour le moment") 
+                    time.sleep(600) #erreur HTTP 429 "Too many requests" ou ConnectionResetError (problème de connexion)
+                    continue
                 else:
-                    contact = []
-                    break
-                
-                writer.writerow({
-                    'Categorie': row["Categorie"],
-                    'Nom': row["Nom"],
-                    'Ville': row["Ville"], 
-                    'Code Postal': row["Code Postal"],
-                    'Activite principale': row["Activite principale"],
-                    'Site Web': site_web,
-                    'Contact': contact
-                })
-                k+=1
-            time.sleep(2)
+                    print(err.code)
+                    print("Arrêt momentané du programme, reprise dans 1 minute (heure actuelle :", str(datetime.now().time()), ")")
+                    print(str(k), " adresses mails trouvées pour le moment") 
+                    time.sleep(60) #erreur HTTP 429 "Too many requests" ou ConnectionResetError (problème de connexion)
+                    continue
+                    
+            except ConnectionResetError:
+                print("Erreur ConnectionResetError")
+                print("Arrêt momentané du programme, reprise dans 2 minutes ( heure actuelle :", str(datetime.now().time()), ")")
+                print(str(k), " adresses mails trouvées pour le moment") 
+                time.sleep(120) #erreur HTTP 429 "Too many requests" ou ConnectionResetError (problème de connexion)
+                continue
+            except:
+                print("Erreur inconnue")
+                print("Arrêt momentané du programme, reprise dans 1 minute ( heure actuelle :", str(datetime.now().time()), ")")
+                print(str(k), " adresses mails trouvées pour le moment") 
+                time.sleep(60) #erreur HTTP 429 "Too many requests" ou ConnectionResetError (problème de connexion)
+                continue
  
         print("Programme terminé | ", str(k), " adresses mails trouvées")         
               
