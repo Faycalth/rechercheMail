@@ -111,6 +111,7 @@ def maj_csv(source):
 
         liste_nom_ent = getNomEntreprise(source)
         i = 0
+        j = len(getNomEntreprise(source))
         k = 0
         for row in reader:
             try:
@@ -119,6 +120,8 @@ def maj_csv(source):
                     site_web = get_url(nom)
                     if site_web:
                         contact = get_mail(site_web)
+                        if contact:
+                            k+=1
                     else:
                         contact = []
                     
@@ -131,10 +134,9 @@ def maj_csv(source):
                         'Site Web': site_web,
                         'Contact': contact
                     })
-                    k+=1
-                print(str(i), " lignes traitées", end="\r")
                 i+=1
-                #time.sleep(1)
+                print(str(i), " lignes traitées sur", j, end="\r")
+                time.sleep(0.05)
             except urllib.error.HTTPError as err: 
                 if err.code == 429:
                     print("Erreur HTTP 429 ('Too many requests')")
@@ -161,8 +163,11 @@ def maj_csv(source):
                 print(str(k), " adresses mails trouvées pour le moment") 
                 time.sleep(60) #erreur HTTP 429 "Too many requests" ou ConnectionResetError (problème de connexion)
                 continue
- 
-        print("Programme terminé | ", str(k), " adresses mails trouvées")         
+        try:
+            print("Programme terminé | ", str(k), "listes d'adresses mails trouvées sur", str(j), "(", round(k/(j-1),2),"%)")
+        except:
+            print("Programme terminé | ", str(k), "listes d'adresses mails trouvées")
+                     
               
 #Programme
 start_time = time.time()
